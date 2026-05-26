@@ -1,15 +1,17 @@
 ---
 name: youtube-transcript
-description: Download a YouTube video's audio and generate transcript files (txt, srt, vtt, tsv, json) using OpenAI Whisper, with NVIDIA GPU acceleration when available. Use when the user provides a YouTube or other video URL and wants a transcript, captions, subtitles, 逐字稿, or 字幕. Triggers on requests to transcribe a video, generate captions for an uncaptioned YouTube video, 把影片轉成逐字稿/文字, extract speech from audio, or any mention of Whisper transcription. Also use when the user provides an mp3/mp4 path and asks for a transcript.
+description: Download a YouTube video's audio and generate transcript files (txt, srt, vtt, tsv, json) using OpenAI Whisper, with NVIDIA GPU acceleration when available. Use when the user provides a YouTube or other yt-dlp-supported URL and wants a transcript, captions, subtitles, 逐字稿, or 字幕. Triggers on requests to transcribe a video, generate captions for an uncaptioned YouTube video, 把影片轉成逐字稿/文字, extract speech from a supported video URL, or any mention of Whisper transcription.
 ---
 
 # YouTube to Transcript
 
-Generate transcript files from a YouTube video (or any source supported by `yt-dlp`) using OpenAI Whisper. All work is done by the bundled PowerShell script:
+Generate transcript files from a YouTube video (or any source supported by `yt-dlp`) using OpenAI Whisper. In this local workspace, all work is done by:
 
 ```
-C:\Users\bruce\.claude\skills\youtube-transcript\transcribe.ps1
+%userprofile%\.claude\skills\youtube-transcript\transcribe.ps1
 ```
+
+This skill currently supports URLs handled by `yt-dlp`. It does not yet accept a local `mp3` or `mp4` path directly.
 
 ## What to ask the user (briefly)
 
@@ -29,11 +31,17 @@ yt-dlp --print "title: %(title)s`nduration: %(duration_string)s`nuploader: %(upl
 ## Running the script
 
 ```powershell
-& "C:\Users\bruce\.claude\skills\youtube-transcript\transcribe.ps1" `
+& "%userprofile%\.claude\skills\youtube-transcript\transcribe.ps1" `
     -Url "<URL>" `
     -InitialPrompt "<hint, e.g. 'Talk by Daisy Holman about Claude Code at Anthropic'>" `
     -OutputDir "C:\temp"
 ```
+
+Optional switches:
+
+- Add `-KeepAudio` if the user wants to keep the downloaded `mp3`.
+- Add `-Model medium` or `-Model large` for multilingual or higher-accuracy runs.
+- Add `-Language Chinese` / `Japanese` / other spoken language names when the audio is not English.
 
 Decision rules:
 
@@ -44,7 +52,7 @@ Decision rules:
 ## First-time setup on a new machine
 
 ```powershell
-& "C:\Users\bruce\.claude\skills\youtube-transcript\transcribe.ps1" -Setup
+& "%userprofile%\.claude\skills\youtube-transcript\transcribe.ps1" -Setup
 ```
 
 This installs (idempotently): Python 3.12 (winget), ffmpeg (winget), yt-dlp (winget), openai-whisper (pip), and the CUDA 12.8 build of PyTorch (pip) when an NVIDIA GPU is detected. winget installs may need a fresh PowerShell session before PATH picks up — the script refreshes PATH itself, but if a step fails with "command not found", advise the user to reopen PowerShell and re-run.
@@ -54,6 +62,18 @@ If PowerShell blocks the script with an execution policy error, advise:
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
+
+## When tools are missing
+
+If `transcribe.ps1` exits with `Missing tool: <name>. Run with -Setup first.`, **ask the user once before running `-Setup`**. Do not auto-install silently. Setup downloads ~5GB total (openai-whisper ~2.5GB + PyTorch CUDA ~2.8GB) and uses `winget`, which may trigger a UAC prompt and require a fresh PowerShell session for PATH to update.
+
+Show the user what will be installed, get explicit confirmation, then run:
+
+```powershell
+& "%userprofile%\.claude\skills\youtube-transcript\transcribe.ps1" -Setup
+```
+
+After setup succeeds, retry the original transcription command. If `winget` reported PATH changes, the script's internal PATH refresh usually handles it; if a tool is still "not found", advise the user to reopen PowerShell and re-run.
 
 ## After it finishes
 
@@ -78,3 +98,4 @@ The downloaded `<base>.mp3` is deleted unless `-KeepAudio` is passed.
 - **Whisper `--help` Unicode crash**: setting `$env:PYTHONIOENCODING = 'utf-8'` fixes it. The script already does this for the transcription run, but mention it if the user hits the error elsewhere.
 - **CPU-only PyTorch**: a plain `pip install openai-whisper` pulls the CPU build. The `-Setup` flow detects this and swaps in the CUDA build. If the user manually reinstalled torch and lost CUDA, re-run `-Setup`.
 - **Hallucinated repetition at silent segments**: Whisper sometimes loops on silence. If the transcript has obvious repetition, suggest re-running with `--condition_on_previous_text False` (would need a small script edit).
+- **Local file input**: this skill description used to imply that local `mp3`/`mp4` files were supported. The current script only accepts `-Url`, so use a yt-dlp-compatible URL unless the script is extended.
